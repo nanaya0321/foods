@@ -1,0 +1,273 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper
+  PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+  "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+  <mapper namespace="org.zerock.foods.mapper.FoodsMapper">
+  	<!-- 상품 리스트 -->
+  	<select id="list" resultType="org.zerock.foods.vo.FoodsVO">
+  		select
+	  			foods_no, foods_name, price, discount, discount_rate, sale_price, saved_rate, image_name
+  		from
+  		(
+	  		select
+	  			rownum rnum, foods_no, foods_name, price, discount, discount_rate, sale_price, saved_rate, image_name
+	  		from
+		  	(
+		  		select
+		  			g.foods_no, g.foods_name, p.price, p.discount, p.discount_rate, p.sale_price, p.saved_rate, g.image_name
+		  		from
+		  			foods g, foods_price p 
+		  		where
+		  		(
+		  			<!-- 검색조건 -->
+		  			<include refid="search"/> 
+		  			<!-- 일반조건 -->
+		  			<!-- 현재 판매되고 있는 상품 -->
+		  			<!-- CDATA를 사용한 태그는 안에 내용이 문자열로 DB서버에 전달된다. -->
+		  			<![CDATA[
+		  			sale_start_date <= sysDate and 
+		  			trunc(sysDate) <= sale_end_date
+		  			]]>
+	  			)
+	  			and
+	  			(
+		  			<!-- 조인 조건 -->
+		  			g.foods_no = p.foods_no
+	  			)
+		  	)
+  		)
+  		where rnum between #{pageObject.startRow} and #{pageObject.endRow}
+  	</select>
+  	
+  	<!-- 페이지 처리를 위한 getTotalRow -->
+  	<select id="getTotalRow" resultType="Long">
+  		select count(*)
+  		from foods g, foods_price p 
+  		where
+  		(
+  			<!-- 검색조건 -->
+  			<include refid="search"/> 			
+  			<!-- 일반조건 -->
+  			<!-- 현재 판매되고 있는 상품 -->
+  			<!-- CDATA를 사용한 태그는 안에 내용이 문자열로 DB서버에 전달된다. -->
+  			<![CDATA[
+  			sale_start_date <= sysDate and
+  			trunc(sysDate) <= sale_end_date
+  			]]>  			
+		)
+		and
+		(
+			<!-- 조인 조건 -->
+			g.foods_no = p.foods_no
+		)
+  	</select>
+  	
+  	<!-- 검색 -->
+  	<sql id="search">
+  		<trim prefixOverrides="and" suffix="and">
+	  		<!-- 카테고리 대분류, 중분류 -->
+	  		<if test="foodsSearchVO.cate_code1 != null and foodsSearchVO.cate_code1 != 0">
+	 			and cate_code1 = ${foodsSearchVO.cate_code1}
+	 			<if test="foodsSearchVO.cate_code2 != null and foodsSearchVO.cate_code2 != 0">
+	 				and cate_code2 = ${foodsSearchVO.cate_code2}
+	 			</if>	 			
+			</if> 	
+			<!-- 제품명 -->
+			<if test="foodsSearchVO.foods_name != null and foodsSearchVO.foods_name != ''.toString()">
+				and foods_name like '%' || #{foodsSearchVO.foods_name} || '%'
+			</if>
+			<!-- 최소가격 -->
+			<if test="foodsSearchVO.min_price != null and foodsSearchVO.min_price != 0">
+				<![CDATA[
+				and sale_price >= #{foodsSearchVO.min_price}
+				]]>
+			</if>
+			<!-- 최대가격 -->
+			<if test="foodsSearchVO.max_price != null and foodsSearchVO.max_price != 0">
+				<![CDATA[
+				and sale_price <= #{foodsSearchVO.max_price}
+				]]>
+			</if>
+  		</trim>
+  	</sql>
+  	<!-- 대분류/중분류 가져오기 -->
+  	<select id="getCategory" resultType="org.zerock.category.vo.CategoryVO">
+  		select
+  			cate_code1, cate_code2, cate_name
+  		from
+  			category
+  		where
+  			<!-- 대분류 조건-->
+  			<if test="cate_code1 == 0">
+  				cate_code2 = 0
+  			</if>
+  			<!-- 중분류 조건-->
+  			<if test="cate_code1 > 0">
+  				cate_code1 = #{cate_code1} and cate_code2 != 0
+  			</if>
+  	</select>
+  	
+  	<!-- 상품 상세보기 -->
+  	<select id="view" resultType="org.zerock.foods.vo.FoodsVO">
+  		select 
+  			g.foods_no, g.foods_name, g.cate_code1, g.cate_code2, g.image_name, g.content, g.company, g.product_date,
+  			c.cate_name,
+  			p.price, p.discount, p.discount_rate, p.sale_price, p.saved_rate, p.delivery_charge, p.sale_start_date, p.sale_end_date,
+  			p.foods_price_no
+  		<!-- from 뒤에 쓸 수 있는 것 : 1. table이름, 2. view이름 3. select 쿼리 -->
+  		from
+  			foods g, foods_price p, category c
+  		where
+  			<!-- 일반조건 -->
+  			(g.foods_no = #{foods_no})
+  			<![CDATA[
+  			and (
+  			sale_start_date <= sysDate and
+  			trunc(sysDate) <= sale_end_date
+  			)
+  			]]> 
+  			<!-- 조인조건 -->
+  			and (g.foods_no = p.foods_no)
+  			and (g.cate_code1 = c.cate_code1 and g.cate_code2 = c.cate_code2)
+  	</select>
+  	
+  	<!-- 상품 사이즈 리스트 -->
+  	<select id="sizeList" resultType="org.zerock.foods.vo.FoodsSizeVO">
+  		select 
+  			foods_size_no, size_name, foods_no
+  		from 
+  			foods_size
+  		where
+  			foods_no = #{foods_no}
+  	</select>
+  	<!-- 상품 컬러 리스트 -->
+  	<select id="optionsList" resultType="org.zerock.foods.vo.FoodsOptionsVO">
+  		select 
+  			foods_options_no, options_name, foods_no
+  		from 
+  			foods_options
+  		where
+  			foods_no = #{foods_no}
+  	</select>
+  	<!-- 상품 이미지 리스트 -->
+  	<select id="imageList" resultType="org.zerock.foods.vo.FoodsImageVO">
+  		select 
+  			foods_image_no, image_name, foods_no
+  		from 
+  			foods_image
+  		where
+  			foods_no = #{foods_no}
+  	</select>
+  	
+  	<!-- 1. 상품등록 -->
+  	<!-- jdbcType = DB로 넘어가는 변수 속성 (대문자)
+  		- null 로 데이터가 넘어갈때 DB에 속성을 알려주는 프로퍼티
+  		VARCHAR: 문자열, INTEGER: 정수형, BIGINT: long 타입, DOUBLE: 실수형, DATE: 날짜, TIMESTAMP: 타임스탬프, BOOLEAN: 논리형
+  	-->
+  	<insert id="write">
+  		<!-- insert할때 primarykey를 미리 세팅할 때 사용 -->
+  		<selectKey keyProperty="foods_no" resultType="Long" order="BEFORE">
+  			select foods_seq.nextval from dual <!-- from dual: 테이블이 없는거 가져올때 사용함  -->
+  		</selectKey>
+  		insert into foods
+  			(foods_no, foods_name, cate_code1, cate_code2, image_name, content, company, product_date)
+  		values
+  			(#{foods_no}, #{foods_name}, #{cate_code1}, #{cate_code2}, #{image_name}, #{content}, #{company}, 
+  			#{product_date, jdbcType=DATE})
+  	</insert>
+
+  	<!-- 가격 정보 등록 -->
+  	<insert id="writePrice">
+  		insert into foods_price
+  			(foods_price_no, price, discount, discount_rate, sale_price, saved_rate, delivery_charge 
+  			<if test="sale_start_date != null">
+  			, sale_start_date  			
+  			</if>
+  			<if test="sale_end_date != null">
+  			, sale_end_date
+  			</if>
+  			, foods_no)
+  		values
+  			(foods_price_seq.nextval, #{price}, #{discount, jdbcType=INTEGER}, #{discount_rate, jdbcType=INTEGER}, 
+  			#{sale_price},
+  			#{saved_rate, jdbcType=INTEGER}, #{delivery_charge, jdbcType=INTEGER}
+  			<if test="sale_start_date != null">
+  			, #{sale_start_date, jdbcType=DATE}
+  			</if>
+  			<if test="sale_end_date != null">
+	  		, #{sale_end_date, jdbcType=DATE}
+  			</if>
+  			, #{foods_no})
+  	</insert>
+  	<!-- 추가 이미지 등록 -->
+  	<insert id="writeImage">
+  		insert into foods_image
+  			(foods_image_no, image_name, foods_no)
+  		values
+  			(foods_image_seq.nextval, #{image_name}, #{foods_no})
+  	</insert>
+  	<insert id="writeSize">
+  		insert into foods_size
+  			(foods_size_no, size_name, foods_no)
+  		values
+  			(foods_size_seq.nextval, #{size_name}, #{foods_no})
+  	</insert>
+  	<!-- GoodsColorVO의 리스트를 받아서 한번에 처리 -->
+  	<insert id="writeOptions">
+  		insert into foods_options
+  			(foods_options_no, options_name, foods_no)
+  		select foods_options_seq.nextval, options_name, foods_no from
+  		(
+  		<foreach collection="list" item="vo" separator=" union all ">
+  			select #{vo.options_name} options_name, #{vo.foods_no} foods_no from dual
+  		</foreach>
+  		)
+  	</insert>
+  	
+  	<!-- 상품 정보 수정 -->
+  	<update id="update">
+  		update foods set 
+  			cate_code1 = #{cate_code1}, cate_code2 = #{cate_code2},
+  			foods_name = #{foods_name}, company= #{company},
+  			content = #{content}, product_date = #{product_date}
+  		where
+  			foods_no = #{foods_no}
+  	</update>
+  	<!-- 상품 가격 수정 -->
+  	<update id="updatePrice">
+  		update foods_price set
+  			price = #{price}, discount = #{discount}, discount_rate = #{discount_rate}, sale_price = #{sale_price},
+  			saved_rate = #{saved_rate}, delivery_charge = #{delivery_charge}, sale_start_date = #{sale_start_date},
+  			sale_end_date = #{sale_end_date}
+  		where
+  			foods_no = #{foods_no} and foods_price_no = #{foods_price_no}
+  	</update>
+  	
+  	<!-- 상품 사이즈 삭제 -->
+  	<delete id="deleteSize">
+  		delete from 
+  			foods_size
+  		where
+  			foods_no = #{foods_no}
+  		
+  	</delete>
+	<!-- 상품 컬러 삭제 -->
+	<delete id="deleteOptions">
+		delete from 
+  			foods_options
+  		where
+  			foods_no = #{foods_no}
+	</delete>
+	<!-- 상품 추가 이미지 삭제 -->
+	<delete id="deleteImage">
+		delete from 
+  			foods_image
+  		where
+  			image_name = #{image_name}
+	</delete>
+	<!-- 상품 글삭제 -->
+	<delete id="delete">
+		delete from foods
+		where foods_no = #{foods_no, jdbcType=BIGINT}
+	</delete>
+  </mapper>
